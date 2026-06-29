@@ -1,7 +1,7 @@
 name: scanneo_app
-description: "A new Flutter project."
+description: "Escáner POS profesional para códigos de barras"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.12.2
@@ -10,15 +10,13 @@ dependencies:
   flutter:
     sdk: flutter
   
-  mobile_scanner: ^7.2.0    # escaneo QR/barcode
-  http: ^1.6.0            # para llamadas HTTP POST
-
+  mobile_scanner: ^7.2.0
+  http: ^1.6.0
   cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^6.0.0
 
 flutter:
