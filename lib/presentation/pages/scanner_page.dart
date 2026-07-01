@@ -32,9 +32,8 @@ class _ScannerPageState extends State<ScannerPage> with TickerProviderStateMixin
     super.initState();
     _service = ScannerService();
     _controller = MobileScannerController(
-      autoStart: false,
-      detectionSpeed: DetectionSpeed.noDuplicates,
-      formats: [BarcodeFormat.all],
+      detectionSpeed: DetectionSpeed.normal,
+      formats: const [BarcodeFormat.all],
     );
     
     _pulseController = AnimationController(
@@ -65,31 +64,24 @@ class _ScannerPageState extends State<ScannerPage> with TickerProviderStateMixin
 
   Future<void> _startScanning() async {
     _updateState(const ScanState(status: ScanStatus.scanning));
-    try {
-      await _controller.start();
-    } catch (e) {
-      _updateState(ScanState(
-        status: ScanStatus.error,
-        message: 'Error al iniciar cámara o permiso denegado',
-      ));
-    }
   }
 
   Future<void> _stopScanning() async {
-    await _controller.stop();
     _updateState(const ScanState(status: ScanStatus.idle));
   }
 
   Future<void> _onBarcodeDetected(BarcodeCapture capture) async {
-    // 1. Si no estamos activamente escaneando, ignoramos la cámara
     if (_state.status != ScanStatus.scanning) return;
 
     final barcode = capture.barcodes.firstOrNull;
     final raw = barcode?.rawValue;
     if (raw == null || raw.isEmpty) return;
 
-    // 2. Ya NO detenemos el controlador físico de la cámara.
-    // Simplemente cambiamos el estado de la UI a "procesando".
+    if (_state.lastScanTime != null) {
+      final diff = DateTime.now().difference(_state.lastScanTime!);
+      if (diff < AppConstants.scanCooldown) return;
+    }
+
     _updateState(ScanState(
       status: ScanStatus.processing,
       lastCode: raw,
@@ -126,7 +118,6 @@ class _ScannerPageState extends State<ScannerPage> with TickerProviderStateMixin
       },
     );
 
-    // 3. Volvemos al estado de escaneo sin reiniciar el hardware
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted && !_isDisposed && (_state.status == ScanStatus.success || _state.status == ScanStatus.error)) {
         _updateState(const ScanState(status: ScanStatus.scanning));
@@ -196,6 +187,7 @@ class _ScannerPageState extends State<ScannerPage> with TickerProviderStateMixin
           ? AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
+              centerTitle: true,
               leading: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white),
                 onPressed: _stopScanning,
@@ -206,6 +198,7 @@ class _ScannerPageState extends State<ScannerPage> with TickerProviderStateMixin
               ),
             )
           : AppBar(
+              centerTitle: true,
               title: const Text(AppConstants.appName),
               actions: [
                 if (_history.isNotEmpty)
@@ -234,6 +227,7 @@ class _ScannerPageState extends State<ScannerPage> with TickerProviderStateMixin
 
   Widget _buildScannerView() {
     return Stack(
+      key: const ValueKey('scanner_view'),
       fit: StackFit.expand,
       children: [
         MobileScanner(
@@ -284,80 +278,77 @@ class _ScannerPageState extends State<ScannerPage> with TickerProviderStateMixin
 
   Widget _buildIdleView() {
     return SafeArea(
-      child: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const SizedBox(height: 32),
-                  // Logo/Icono animado
-                  Hero(
-                    tag: 'scanner-icon',
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppColors.primary, AppColors.primaryLight],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(32),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha:0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
+      key: const ValueKey('idle_view'),
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(left: 24, right: 24, top: 24, bottom: 104),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Hero(
+                tag: 'scanner-icon',
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, AppColors.primaryLight],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
                       ),
-                      child: const Icon(
-                        Icons.qr_code_scanner,
-                        size: 56,
-                        color: Colors.white,
-                      ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 32),
-                  Text(
-                    'ScanNeo POS',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+                  child: const Icon(
+                    Icons.qr_code_scanner,
+                    size: 56,
+                    color: Colors.white,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Escanea y envía productos a tu caja registradora',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  StatusCard(state: _state),
-                  if (_history.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Últimos escaneos',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ..._history.take(5).map((h) => ScanHistoryItem(state: h)),
-                  ],
-                ],
+                ),
               ),
-            ),
+              const SizedBox(height: 32),
+              Text(
+                'LamkScan',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface, 
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Escanea y envía productos a tu caja registradora',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+              ),
+              const SizedBox(height: 40),
+              StatusCard(state: _state),
+              if (_history.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Últimos escaneos',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ..._history.take(5).map((h) => ScanHistoryItem(state: h)),
+              ],
+            ],
           ),
-          const SizedBox(height: 80), // Espacio para FAB
-        ],
+        ),
       ),
     );
   }
