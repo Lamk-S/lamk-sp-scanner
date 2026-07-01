@@ -8,6 +8,6 @@ void main() {
     await tester.pumpWidget(const ScannerApp());
 
     // Verifica que la app inicia y muestra el título o el botón de escanear
-    expect(find.text('ScanNeo POS'), findsOneWidget);
+    expect(find.text('LamkScan'), findsOneWidget);
   });
 }
